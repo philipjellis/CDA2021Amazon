@@ -13,7 +13,6 @@ from datetime import datetime
 import os
 import pickle
 from qs import mortdick
-THISYEAR = datetime.today().year
 #from iam2012 import morty
 #from iam2012 import morty2
 
@@ -27,25 +26,26 @@ THISYEAR = datetime.today().year
 
 
 
-
-OUTPUTNAME = "1-AAABal"
-NPEEP = 100
-RUNS = 10
-FUNDVAL = 10000000.0
-FUNDFILE = "122020AAA6040.csv"
+PRUDENT = True
+OUTPUTNAME = "16-IWM7525_62U"
+NPEEP = 1000
+RUNS = 1000
+FUNDVAL = 100000000.0
+FUNDFILE = "IWM_ESG2020_1_19AAABAL.csv"
 ANNCUM = "CUM"
 INCOME = 0.05
 WMFEE = 0.01
 PREMIUM = 0.0055000000000000005
 DISCOUNT = 0.03
+CENSUSFILE = "M62U.json"
 ASSUMP_LAP = "NEW"
 ASSUMP_EXP = "NEW"
 ASSUMP_MOR = "NEW"
 STOCHASTIC = False
-DEBUG = True
+DEBUG = False
 MORTSPREADSHEET = "IAM20122581_2582.xlsx"
 YEARONEINCOME = 1.0
-LAPSEUTILIZATION = "LapseUtilizationLIM15QUnQx.xlsx"
+LAPSEUTILIZATION = "Utilization2020_1_26.xlsx"
 # empty line
 # empty line
 # empty line
@@ -62,13 +62,12 @@ LAPSEUTILIZATION = "LapseUtilizationLIM15QUnQx.xlsx"
 # empty line
 # empty line
 # empty line
-# empty line
-
 TODAY = np.datetime64('today', 'D')
 THISYEAR = datetime.today().year
 LASTYEAR = THISYEAR - 1 # used because values such as NPV are end of year, so starting NPV is last year's
 FUNDDIRECTORY = '/home/test/funds/'
 HOMEDIRECTORY = '/home/test/working/'
+OUTPUTDIR = '/home/test/working/results/'
 MAXAGE = 120 # saves looking it up in a mortality table.  Need to change if we change tables.
 INFLATIONRATE = 1.02
 AFTERFEES = (1 - PREMIUM) * (1 - WMFEE)
@@ -84,7 +83,7 @@ os.environ['NUMEXPR_MAX_THREADS'] = str(PROCESSORS) #'48'
 MORTSPREADSHEET = HOMEDIRECTORY + MORTSPREADSHEET
 LAPSEFILE = HOMEDIRECTORY + LAPSEUTILIZATION 
 MARKET = FUNDDIRECTORY + FUNDFILE
-CENSUS = HOMEDIRECTORY + 'census.json'
+CENSUS = OUTPUTDIR + CENSUSFILE 
 LAPSETABLE = pd.read_excel(LAPSEFILE,skiprows=2,index_col=0)  
 QUALUTILIZED = pd.read_excel(LAPSEFILE,2,skiprows=1,index_col=0)
 UNQUALUTILIZED = pd.read_excel(LAPSEFILE,1,skiprows=1,index_col=0)
@@ -98,9 +97,16 @@ pmort = {}
 DISCO = 1 + DISCOUNT
 #HALF_YR = DISCO ** .5 if HALFYEARNPV else 1.0 # this adds half a year to the NPV figures, arguable - cash flow timing
 V = 1 / DISCO
+if PRUDENT:
+    MORTMULT = .95
+    LAPSEEXP = 3.0
+    EXPENSEMULT = 1.1
+else:
+    MORTMULT = 1.0
+    LAPSEEXP = 2.5
+    EXPENSEMULT = 1.0
 PERSONFUND = FUNDVAL * 1.0 / NPEEP
 THISYEAR = datetime.now().year
-OUTPUTDIR = '/home/test/working/results/'
 FUNDFILENAME = OUTPUTDIR + FUNDFILE #FUNDDIRECTORY + FUNDFILE
 MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split()
 NOWSTR = datetime.today().strftime("%Y_%m_%d")
@@ -232,12 +238,12 @@ def intro(params):
         ('08 Wealth Management Fee', "{:.2f}%".format(WMFEE * 100)),
         ('13 Discount rate', "{:.2f}%".format(100*DISCOUNT)),
         ('19 Insurance premium as % of covered assets', "{:.2f}%".format(100 * PREMIUM)),
-        ('20 Expenses assumption - Old or New', ASSUMP_EXP ),
-        ('21 Mortality assumption - Old or New', ASSUMP_MOR ),
-        ('22 Lapse assumption - Old or New', ASSUMP_LAP ),
+        ('20 Expenses multiplier', EXPENSEMULT ),
+        ('21 Mortality multiplier', MORTMULT ),
+        ('22 Lapse exponent', LAPSEEXP ),
         ('23 Mortality Spreadsheet', MORTSPREADSHEET ),
-        ('24 Lapse Utilization Spreadsheet', LAPSEUTILIZATION )
-        #('25 Qualified', QUALIFIED )
+        ('24 Lapse Utilization Spreadsheet', LAPSEUTILIZATION ),
+        ('25 Census file', CENSUSFILE )
         ])
     parameters = OrderedDict([('Parameter Values',ddick)])
     pframe = pd.DataFrame(parameters)
@@ -356,7 +362,7 @@ def lapsedty(year, funds, group, startage, age, finished):
                 multiplier = .5
             nyears = min([age - startage + 1]) # starts in year 1
             baselapse = BASELAPSES[nyears][startage] * multiplier
-            dynlapse = min([(fd.fundhist[year] / fd.startvalue) ** 3,LAPSECAP])
+            dynlapse = min([(fd.fundhist[year] / fd.startvalue) ** LAPSEEXP,LAPSECAP])
             lapserate = baselapse * dynlapse
         if random() < lapserate:
             return True
@@ -431,7 +437,7 @@ def runno(name):
         print(name, ' started')
 
 def set_params(): #mortable): used to pass in MORTALITYTABLEFEMALE see below
-    cs = pd.read_json(CENSUS) # always same name - file sent from desktop 
+    cs = pd.read_json(CENSUS)
     cs.index = [i.lower() for i in cs.index]
     youngest = min(cs.loc['startage'])
     oldest = 120 # len(mortdick[mortable]) see above
@@ -449,8 +455,8 @@ lookupmort_p = np.vectorize(_lookupmort, otypes=[np.float])
 
 def morty(key):
     sex = key[0]
-    nyears = THISYEAR - 2012 # as this is 2012 mortality table/improvement scale
     age = int(key[1:])
+    nyears = THISYEAR - 2012
     if sex == 'F': 
         table = MORT_Fq
         improve = 1 - MORT_FG2
@@ -458,9 +464,7 @@ def morty(key):
         table = MORT_Mq
         improve = 1 - MORT_MG2
     table['n'] = [max([0,i - age + nyears]) for i in table.index] # power to raise the G2 to
-    result = table['q'] * np.power(improve['G2'],table['n']) * MORT_F['F'] * .95 # PJE 20/11/11
-    result[120] = 1 # force this to stay 1 so everyone terminates at 120
-    return result
+    return table['q'] * np.power(improve['G2'],table['n']) * MORT_F['F'] * MORTMULT # PJE 21/1/29
 
 def _lapsedty(startage, age, fundsize, value):
     try:
@@ -598,7 +602,7 @@ def punk(inconame, queues, peepframe, years, pmort):
         bustthisy[y] = np.where((people.runindone == True) & (people.bust == False) & (payout[y] > 0),people['n'],0)
         people.loc[(people.runindone == True) & (people.bust == False) & (payout[y] > 0), "bust"] = True 
         people['value'] = people['value'] - income[y]
-        expenses[y] = 1.1 * (people['value'] * .0005 + 25 * inflation * people['n'] + payout[y] * .01)
+        expenses[y] = EXPENSEMULT * (people['value'] * .0005 + 25 * inflation * people['n'] + payout[y] * .01)
         cashflow[y] = premiums[y] - expenses[y]
         #
         # Step 2 Census calculations - see who dies, lapses, decides to utilize during the year
@@ -608,8 +612,22 @@ def punk(inconame, queues, peepframe, years, pmort):
         people['p'] = 1 - people['q']
         diedthisy[y] = people['n'] * people['q']
         people['util'] = utilized_p(people['startage'], people['age'], people['runindone'],people['qualified'])
-        people['qLapseNoInc'] = lapsedty_p(people['startage'], people['age'], people['fundsize'], people['PersValSoY']) 
-        people['qLapseInc'] = people['qLapseNoInc'] / 2.0
+        #people['qLapseNoInc'] = lapsedty_p(people['startage'], people['age'], people['fundsize'], people['PersValSoY']) # use avge remain for utilized PJE this removed 2020/1/12
+        people['qLapseNoInc'] = lapsedty_p(people['startage'], people['age'], people['fundsize'], people['shadow']) 
+        #PJE new calc for those in Income based on avge values left in fund
+        #PJE two approaches a) and b)
+        #a        
+        people['NoIncValRemain'] = people['nNoIncome'] * people['shadow'] * AFTERFEES
+        people['totvalInInc'] = people['value'] - people['NoIncValRemain']
+        people['persValInInc'] = np.where(people['nIncome'] > 0,people['totvalInInc'] / people['nIncome'],0.0)
+        people['qLapseInc'] = lapsedty_p(people['startage'],people['age'],people['fundsize'], people['persValInInc']) / 2.0
+        #b
+        #people['totvalremain'] = people['n'] * people['PersValSoY']
+        #people['NoIncValRemain'] = people['nNoIncome'] * people['shadow']
+        #people['totvalInInc'] = people['totvalremain'] - people['NoIncValRemain']
+        #people['persValInInc'] = np.where(people['nIncome'] > 0,people['totvalInInc'] / people['nIncome'],0.0)
+        #people['qLapseInc'] = lapsedty_p(people['startage'],people['age'],people['fundsize'], people['persValInInc']) / 2.0
+        #PJE end of new InIncome code
         people['pLapseNoInc'] = 1 - people['qLapseNoInc']
         people['pLapseInc'] = 1 - people['qLapseInc']
         #
@@ -1104,7 +1122,7 @@ if __name__ == '__main__':
                               ('CTE 90 $', cte90),
                               ('CTE 98 $', cte98),
                               ('C3P2 $',vm21),
-                              ('800RBC $', 4 * vm21),
+                              ('800RBC %', 4 * 100 * vm21 / FUNDVAL), #800RBC % day1 protected assets
                               ('Worst NPV CF $', worstone),
                               ('% claim', pct_claim),
                               ('Number died',tot_died),
