@@ -23,10 +23,10 @@ def errr(column):
     return msg
 
 #def appendchange(
-scenarios = pd.read_json('/home/test/working/scenario.json')
-print (scenarios)
+scenarios = pd.read_json('/home/test/working/results/scenario.json')
+#print (scenarios)
 scenarios.index = [i.replace(' ','').lower() for i in scenarios.index]
-census = pd.read_json('/home/test/working/census.json')
+census = pd.read_json('/home/test/working/results/census.json')
 census.index = [i.replace(' ','').lower() for i in census.index]
 cst = census.T
 population = cst.n.sum()
@@ -47,10 +47,8 @@ for col,col_data in scenarios.items():
     outf.write('cp /home/test/working/mp9master.py /home/test/working/mp9.py\n')
     changes = []
     errors = errr(col_data)
-    if 'AAA' in col_data.csvfile.upper():
-        anncum = 'CUM'
-    else:
-        anncum = 'ANN'
+    # PJE might want to switch this back to work both ways - everything forced to be cumulative now
+    anncum = 'CUM'
     if errors == '': # then no errors, get going
         changes.append('OUTPUTNAME = "' + col + '"')
         changes.append('NPEEP = ' + str(population)) 
@@ -62,19 +60,23 @@ for col,col_data in scenarios.items():
         changes.append('WMFEE = ' + str(col_data.wmfee))
         changes.append('PREMIUM = ' + str(col_data.premium))
         changes.append('DISCOUNT = ' + str(col_data.discountrate))
-        changes.append('ASSUMP_LAP = "NEW"')
-        changes.append('ASSUMP_EXP = "NEW"')
-        changes.append('ASSUMP_MOR = "NEW"')
+        census = col_data.censusfile
+        if pd.isna(census):
+            censusjson = 'census.json'
+        else:
+            censusjson = census.split('.')[0] +'.json' # remove .xlsx, which is the census ss. We use json file
+        changes.append('CENSUSFILE = "' + censusjson + '"')
         changes.append('STOCHASTIC = ' + str(col_data.stochastic == 1))
         changes.append('DEBUG = ' + str(col_data.debug == 1))
+        changes.append('PRUDENT = ' + str(col_data.prudent == 1))
         changes.append('MORTSPREADSHEET = "' + str(col_data.mortspreadsheet) + '"')
         changes.append('YEARONEINCOME = ' + str(col_data.yearoneincome))
         changes.append('LAPSEUTILIZATION = "' + str(col_data.lapseutilization) + '"')
-        lineno = 30 # changes all happen to lines following line 30
+        lineno = 25 # changes all happen to lines following line 30
         for change in changes: # this fills lines 30 to 60 up with these parameter settings
             outf.write("""sed -i '""" + str(lineno) + """s/^.*/""" + change + """/' /home/test/working/mp9.py\n""")
             lineno += 1
-        while lineno < 65: # if we haven't filled them up then just fill up the remainder with comments
+        while lineno < 50: # if we haven't filled them up then just fill up the remainder with comments
             outf.write("""sed -i '""" + str(lineno) + """s/^.*/# empty line/' /home/test/working/mp9.py\n""")
             lineno += 1
         outf.write('/home/ubuntu/anaconda3/bin/python /home/test/working/mp9.py\n')

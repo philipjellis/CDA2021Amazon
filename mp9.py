@@ -12,12 +12,9 @@ import time
 from datetime import datetime
 import os
 import pickle
-from qs import mortdick
-#from iam2012 import morty
-#from iam2012 import morty2
 
 #
-# FROM LINE 30 to 60
+# FROM LINE 25 to 49
 # DO NOT MESS WITH THESE LINES THEY ARE SET UP BY SED IN BATCH MODE!!!!!
 #Following lines are just an example
 #
@@ -25,27 +22,23 @@ from qs import mortdick
 
 
 
-
-PRUDENT = True
-OUTPUTNAME = "16-IWM7525_62U"
+OUTPUTNAME = "Standard2021Mar"
 NPEEP = 1000
 RUNS = 1000
 FUNDVAL = 100000000.0
-FUNDFILE = "IWM_ESG2020_1_19AAABAL.csv"
+FUNDFILE = "032021AAA6040.csv"
 ANNCUM = "CUM"
 INCOME = 0.05
 WMFEE = 0.01
 PREMIUM = 0.0055000000000000005
 DISCOUNT = 0.03
-CENSUSFILE = "M62U.json"
-ASSUMP_LAP = "NEW"
-ASSUMP_EXP = "NEW"
-ASSUMP_MOR = "NEW"
+CENSUSFILE = "census.json"
 STOCHASTIC = False
 DEBUG = False
+PRUDENT = True
 MORTSPREADSHEET = "IAM20122581_2582.xlsx"
 YEARONEINCOME = 1.0
-LAPSEUTILIZATION = "Utilization2020_1_26.xlsx"
+LAPSEUTILIZATION = "Utilization2021_1_26.xlsx"
 # empty line
 # empty line
 # empty line
@@ -54,14 +47,7 @@ LAPSEUTILIZATION = "Utilization2020_1_26.xlsx"
 # empty line
 # empty line
 # empty line
-# empty line
-# empty line
-# empty line
-# empty line
-# empty line
-# empty line
-# empty line
-# empty line
+# From line 50 onwards is proper code.  Don't touch this either!
 TODAY = np.datetime64('today', 'D')
 THISYEAR = datetime.today().year
 LASTYEAR = THISYEAR - 1 # used because values such as NPV are end of year, so starting NPV is last year's
@@ -74,12 +60,6 @@ AFTERFEES = (1 - PREMIUM) * (1 - WMFEE)
 SIMPLE_FILES = False # enables use of files with q=0 or lapse = 0 or whatever
 PROCESSORS = 47
 os.environ['NUMEXPR_MAX_THREADS'] = str(PROCESSORS) #'48'
-#if SIMPLE_FILES:
-#    MORTSPREADSHEET = 'debugmort.xlsx'
-#    LAPSEFILE = HOMEDIRECTOR + 'debuglapse.xlsx'
-#    market = FUNDDIRECTORY + 'fundsESG1.csv'
-#    census = 'PolicyData.xlsx'
-#else:
 MORTSPREADSHEET = HOMEDIRECTORY + MORTSPREADSHEET
 LAPSEFILE = HOMEDIRECTORY + LAPSEUTILIZATION 
 MARKET = FUNDDIRECTORY + FUNDFILE
@@ -98,9 +78,9 @@ DISCO = 1 + DISCOUNT
 #HALF_YR = DISCO ** .5 if HALFYEARNPV else 1.0 # this adds half a year to the NPV figures, arguable - cash flow timing
 V = 1 / DISCO
 if PRUDENT:
-    MORTMULT = .95
+    MORTMULT = .95  
     LAPSEEXP = 3.0
-    EXPENSEMULT = 1.1
+    EXPENSEMULT = 1.1 
 else:
     MORTMULT = 1.0
     LAPSEEXP = 2.5
@@ -283,8 +263,9 @@ def benefs(wdd,df,inco):
             index = ['nbeneficiaries','totbenefit','totdied','totyeardied'], 
             name = inco)
 
+"""
 def minnpv(r1): #this takes all the NPVs from e.g. [2020] to [2020..2089] and calculates the min
-    npv = pd.Series([npf.npv(DISCOUNT,r1[:i]) for i in range(len(r1))]) / DISCO
+    npv = pd.Series([npf.npv(DISCOUNT,r1[:i]+1) for i in range(len(r1))]) / DISCO
     return min(npv.min(),0)
 
 def gpvad(r1,cols=None): #this returns [minnpv[y] for y in range 2020,2090]
@@ -293,6 +274,43 @@ def gpvad(r1,cols=None): #this returns [minnpv[y] for y in range 2020,2090]
     if cols:
         result.index = cols
     return result
+"""
+def gpvad(r1,ix=None):
+    """
+    In [65]: test=pd.Series([100,-100,-100,50,50])
+
+    In [66]: gpvad(test)
+    Out[66]:
+        0    -88.686378
+        1   -191.346970
+        2    -97.087379
+        3      0.000000
+        4      0.000000
+        dtype: float64
+    | General 5 year example  |          |           |           |           |
+    | ----------------------- | -------- | --------- | --------- | --------- |
+    | Interest                | 3%       |           |           |           |  |
+    | Year                    | 1        | 2         | 3         | 4         | 5 |
+    | Cashflow                | 100      | \-100     | \-100     | 50        | 50 |
+    | Discounted CF to year n |          |           |           |           |
+    |                         | $97.09   | $2.83     | ($88.69)  | ($44.26)  | ($1.13) |
+    |                         |          | ($97.09)  | ($191.35) | ($145.59) | ($101.17) |
+    |                         |          |           | ($97.09)  | ($49.96)  | ($4.20) |
+    |                         |          |           |           | $48.54    | $95.67 |
+    |                         |          |           |           |           | $48.54 |
+    | GPVAD Vector            | ($88.69) | ($191.35) | ($97.09)  | $0.00     | $0.00 |
+
+    """
+    def gpv2(r2): # gets the GPV for 1 list
+        result = np.array([npf.npv(DISCOUNT,r2[:i+1]) for i in range(len(r2))]) / DISCO
+        #print(result)
+        return np.min(np.minimum(result,0))
+    if ix:
+        indx = ix
+    else:
+        indx = r1.index
+    return pd.Series([gpv2(r1[ix:]) for ix in range(len(r1))],indx)
+
 
 def getq(q):
     result = []
@@ -472,7 +490,7 @@ def _lapsedty(startage, age, fundsize, value):
     except:
         return 0.0
     dynlapse = min([np.power(value / fundsize,3),1.5])
-    return baselapse * dynlapse
+    return baselapse * dynlapse 
 
 lapsedty_p = np.vectorize(_lapsedty, otypes=[np.float])
 
@@ -517,6 +535,7 @@ def _utilized(startage, age, qualified):
 """
 utilized_p = np.vectorize(_utilized, otypes=[np.float])
 
+"""
 def fillq(q,nlines=1000000):
     if 'AAA' in MARKET: # then we have a AAA file which is cumulative
         df_ = pd.read_csv(MARKET,index_col = False, names = range(2020,2091))
@@ -535,6 +554,7 @@ def fillq(q,nlines=1000000):
         q.put(df.iloc[i])
         line += 1
         if line > stop: break
+"""
 
 def summer(df,name):
     try:
@@ -612,22 +632,12 @@ def punk(inconame, queues, peepframe, years, pmort):
         people['p'] = 1 - people['q']
         diedthisy[y] = people['n'] * people['q']
         people['util'] = utilized_p(people['startage'], people['age'], people['runindone'],people['qualified'])
-        #people['qLapseNoInc'] = lapsedty_p(people['startage'], people['age'], people['fundsize'], people['PersValSoY']) # use avge remain for utilized PJE this removed 2020/1/12
-        people['qLapseNoInc'] = lapsedty_p(people['startage'], people['age'], people['fundsize'], people['shadow']) 
+        people['qLapseNoInc'] = lapsedty_p(people['startage'], people['age'], people['fundsize'], people['shadow'] * AFTERFEES * growth) # PJE this duplicates shadow calc below - but ly shadow used for val remaining below
         #PJE new calc for those in Income based on avge values left in fund
-        #PJE two approaches a) and b)
-        #a        
         people['NoIncValRemain'] = people['nNoIncome'] * people['shadow'] * AFTERFEES
         people['totvalInInc'] = people['value'] - people['NoIncValRemain']
         people['persValInInc'] = np.where(people['nIncome'] > 0,people['totvalInInc'] / people['nIncome'],0.0)
-        people['qLapseInc'] = lapsedty_p(people['startage'],people['age'],people['fundsize'], people['persValInInc']) / 2.0
-        #b
-        #people['totvalremain'] = people['n'] * people['PersValSoY']
-        #people['NoIncValRemain'] = people['nNoIncome'] * people['shadow']
-        #people['totvalInInc'] = people['totvalremain'] - people['NoIncValRemain']
-        #people['persValInInc'] = np.where(people['nIncome'] > 0,people['totvalInInc'] / people['nIncome'],0.0)
-        #people['qLapseInc'] = lapsedty_p(people['startage'],people['age'],people['fundsize'], people['persValInInc']) / 2.0
-        #PJE end of new InIncome code
+        people['qLapseInc'] = lapsedty_p(people['startage'],people['age'],people['fundsize'], people['persValInInc'] * growth) / 2.0 # PJE this pushes lapse calc for in income folk to end of year values
         people['pLapseNoInc'] = 1 - people['qLapseNoInc']
         people['pLapseInc'] = 1 - people['qLapseInc']
         #
@@ -1095,11 +1105,20 @@ if __name__ == '__main__':
     cte70 = tvar(gpvadthisy,70)
     cte90 = tvar(gpvadthisy,90)
     if RUNS > 49: # I Tail VAR 98 if at least 100 runs, else zero
+        cte80 = tvar(gpvadthisy,80)
+        cte82 = tvar(gpvadthisy,82)
+        cte84 = tvar(gpvadthisy,84)
+        cte85 = tvar(gpvadthisy,85)
+        cte86 = tvar(gpvadthisy,86)
+        cte88 = tvar(gpvadthisy,88)
+        cte90 = tvar(gpvadthisy,90)
+        cte92 = tvar(gpvadthisy,92)
+        cte94 = tvar(gpvadthisy,94)
+        cte96 = tvar(gpvadthisy,96)
         cte98 = tvar(gpvadthisy,98)
-        #npvtv97 = tvar(gpvaddf,97) 
     else:
-        cte98 = 0.0 # 0 as N/A or None causes calculation problems.  Will be > 49 runs in most cases.
-        #npvtv97 = 0.0 
+        cte98,cte96,cte94,cte92,cte90 = (0.0, 0.0, 0.0, 0.0, 0.0) # Will be > 49 runs in most cases.
+        cte88,cte86,cte84,cte82,cte80,cte85 = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0) #
     spectrumthisy = npvsthisy.sort_values()
     worstone = spectrumthisy.iloc[0] # The worst run
     tot_paid = statsdf['totpo'].sum()
@@ -1119,7 +1138,16 @@ if __name__ == '__main__':
     vm21 = .25 * ((cte98 - cte70) * (1 - 0.21) - (cte70 - taxcte70) * .21)
     report_data = OrderedDict([('CTE 0 NPV CF $', npvavg[LASTYEAR]),
                               ('CTE 70 $', cte70),
-                              ('CTE 90 $', cte90),
+                              #('CTE 80 $', cte80),
+                              #('CTE 82 $', cte82),
+                              #('CTE 84 $', cte84),
+                              #('CTE 85 $', cte85),
+                              #('CTE 86 $', cte86),
+                              #('CTE 88 $', cte88),
+                              #('CTE 90 $', cte90),
+                              #('CTE 92 $', cte92),
+                              #('CTE 94 $', cte94),
+                              #('CTE 96 $', cte96),
                               ('CTE 98 $', cte98),
                               ('C3P2 $',vm21),
                               ('800RBC %', 4 * 100 * vm21 / FUNDVAL), #800RBC % day1 protected assets
