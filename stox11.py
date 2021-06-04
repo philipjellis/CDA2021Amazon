@@ -2,7 +2,7 @@ import pandas as pd
 import datetime
 import numpy as np
 import math
-from qs import mortdick
+#from qs import mortdick
 from random import random, gauss, seed
 from collections import OrderedDict, deque, namedtuple
 import copy
@@ -117,7 +117,7 @@ class Fund(object):
             col.index = ix
             columns.append(col)
         sheet = pd.concat([col for col in columns],axis=1)
-        sheet.to_excel('/home/test/working/results/' + self.mkt.fund + self.inco + self.group + '.xlsx')
+        sheet.to_excel('/home/working/results/' + self.mkt.fund + self.inco + self.group + '.xlsx')
 
     def mtm(self):
         return self.units * self.prices

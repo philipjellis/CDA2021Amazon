@@ -41,9 +41,9 @@ class Const(object):
     TODAY = np.datetime64('today', 'D')
     THISYEAR = datetime.datetime.today().year
     LASTYEAR = THISYEAR - 1 # values such as NPV are end of year, so starting NPV is last year's
-    FUNDDIRECTORY = '/home/test/funds/'
-    HOMEDIRECTORY = '/home/test/working/'
-    OUTPUTDIR = '/home/test/working/results/'
+    FUNDDIRECTORY = '/home/funds/'
+    HOMEDIRECTORY = '/home/working/'
+    OUTPUTDIR = '/home/working/results/'
     AFTERFEES = (1 - PREMIUM) * (1 - WMFEE)
     PROCESSORS = 47
     MORTSPREADSHEET = HOMEDIRECTORY + MORTSPREADSHEET

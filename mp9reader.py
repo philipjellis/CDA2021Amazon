@@ -23,28 +23,28 @@ def errr(column):
     return msg
 
 #def appendchange(
-scenarios = pd.read_json('/home/test/working/results/scenario.json')
+scenarios = pd.read_json('/home/working/results/scenario.json')
 #print (scenarios)
 scenarios.index = [i.replace(' ','').lower() for i in scenarios.index]
-census = pd.read_json('/home/test/working/results/census.json')
+census = pd.read_json('/home/working/results/census.json')
 census.index = [i.replace(' ','').lower() for i in census.index]
 cst = census.T
 population = cst.n.sum()
 fundsize = (cst.n * cst.fundsize).sum()
-writer = pd.ExcelWriter('/home/test/working/inputs.xlsx')
+writer = pd.ExcelWriter('/home/working/inputs.xlsx')
 scenarios.to_excel(writer,'Scenarios')
 census.to_excel(writer,'Census')
 writer.save()
-outf = open('/home/test/working/mp9run.sh','w')
+outf = open('/home/working/mp9run.sh','w')
 outf.write('#!/bin/bash\n')
-outf.write('cp /home/test/working/inputs.xlsx  /home/test/working/results/inputs.xlsx\n')
-outf.write('cp /home/test/working/read5.py  /home/test/working/results/read5.py\n')
-outf.write('cp /home/test/working/mp9master.py  /home/test/working/results/mp9master.py\n')
-outf.write('cp /home/test/working/stox11.py  /home/test/working/results/stox11.py\n')
+outf.write('cp /home/working/inputs.xlsx  /home/working/results/inputs.xlsx\n')
+outf.write('cp /home/working/read5.py  /home/working/results/read5.py\n')
+outf.write('cp /home/working/mp9master.py  /home/working/results/mp9master.py\n')
+outf.write('cp /home/working/stox11.py  /home/working/results/stox11.py\n')
 totalerror = ''
 for col,col_data in scenarios.items():
     print ('Processing ',col)
-    outf.write('cp /home/test/working/mp9master.py /home/test/working/mp9.py\n')
+    outf.write('cp /home/working/mp9master.py /home/working/mp9.py\n')
     changes = []
     errors = errr(col_data)
     # PJE might want to switch this back to work both ways - everything forced to be cumulative now
@@ -74,19 +74,20 @@ for col,col_data in scenarios.items():
         changes.append('LAPSEUTILIZATION = "' + str(col_data.lapseutilization) + '"')
         lineno = 25 # changes all happen to lines following line 30
         for change in changes: # this fills lines 30 to 60 up with these parameter settings
-            outf.write("""sed -i '""" + str(lineno) + """s/^.*/""" + change + """/' /home/test/working/mp9.py\n""")
+            outf.write("""sed -i '""" + str(lineno) + """s/^.*/""" + change + """/' /home/working/mp9.py\n""")
             lineno += 1
         while lineno < 50: # if we haven't filled them up then just fill up the remainder with comments
-            outf.write("""sed -i '""" + str(lineno) + """s/^.*/# empty line/' /home/test/working/mp9.py\n""")
+            outf.write("""sed -i '""" + str(lineno) + """s/^.*/# empty line/' /home/working/mp9.py\n""")
             lineno += 1
-        outf.write('/home/ubuntu/anaconda3/bin/python /home/test/working/mp9.py\n')
+        #outf.write('/home/ubuntu/anaconda3/bin/python /home/working/mp9.py\n')
+        outf.write('python /home/working/mp9.py\n')
     else:
         print('error!!',errors)
         totalerror += errors
 if totalerror != '': # then errors.  Write them to a file and make the script read them
-    errorfile = open('/home/test/working/output.txt','w')
+    errorfile = open('/home/working/output.txt','w')
     errorfile.write(totalerror)
     errorfile.close()
-outf.write('echo "FINISHED" >> /home/test/working/results/output.txt')
+outf.write('echo "FINISHED" >> /home/working/results/output.txt')
 outf.close()
 print ('Done')
